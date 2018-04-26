@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Compose!</title>
+    
+    <script src="/scripts/Tone.js"></script>
+	<script src="/scripts/jquery.min.js"></script>
+
+	<script src="/scripts/StartAudioContext.js"></script>
+	<script src="/scripts/nexusUI.js"></script>
+    
+    <link rel="stylesheet" type="text/css" href="/css/bootstrap.css">
+    <style>
+        body { 
+            background-color: black;
+            color: white;
+            content-align: center;
+            text-align:center;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="songTitle">Song</h1>
+    <a href="/profile">Back</a>
+    
+    <form>
+        <input name="title" placeholder="title" required>
+        <input name="notes" hidden>
+        <input name="bpm" hidden>
+        <input name="user" hidden>
+        <button id="update" type="submit" class="btn btn-warning">Update</button>
+        <button id="delete" class="btn btn-warning">Delete</button>
+    </form>
+    
+    <style type="text/css">
+		canvas {
+			margin-top: 3px;
+		}
+	</style>
+    
+    <!-- Div for nexus ui content-->
+    <!--  nx = NexusUI  -->
+	<div id="Content">
+        <div id="playButton" class="container">
+            <h3>Play</h3>
+            <canvas nx="toggle"></canvas>
+        </div>
+		<canvas nx="matrix"></canvas>
+        <h3>BPM</h3>
+        <canvas nx="slider"></canvas>
+	</div>
+    
+    <div id="slider"></div>
+    
+	<script>
+        
+//        var $ = require("jquery");
+        var Tone = require("Tone");
+        
+        var notesArray;
+        var bpm;
+//        var nx = require("nexusui")
+        
+        $(document).ready(function() {
+            var params = new URLSearchParams(window.location.search);
+            var id = params.get("_id");
+            var url = "/api/comps/"+id;
+            
+            //get the song from the id
+            fetch(url, {
+                method: 'get'
+            }).then(function(response) {
+                return response.json();
+            }).then(function(data) {
+                $("input[name='title']").val(data.title);   //get the song title
+                $("input[name='user']").val(data.user);     //get the user name
+                
+                $("#songTitle").html(data.title);   //show song title
+                
+                notesArray = data.notes;    //place the saved notes into the pages notes
+                
+                //if there are 0 notes, load nothing
+                //set up a blank matrix
+                
+                //matrix1.matrix is an array of arrays
+                //each with 1 or 0 to show if the note is active
+                if(notesArray.length === 0) {
+//                    matrix1.matrix = defaultArray;
+                } else {
+                    matrix1.matrix = notesArray;    //if there are notes, load them into current matrix
+                }
+                
+                bpm = data.bpm; //get bpm from data
+                
+                //if there is no bpm, set it at 120
+                if (bpm == null) {
+                    bpm = 120;
+                } else {
+                    bpm = Math.round(bpm);  //round to integer
+                }
+                
+                //set the bpm value of the Tone.Transport
+                //this is the player
+                Tone.Transport.bpm.value = bpm;
+                
+            }).catch(function(err) {
+                console.log(err);
+            });
+            
+            //update song name, bpm, notes
+            $('#update').click(function() {
+                
+                $("input[name='bpm']").val(bpm);    //the bpm gets passed to the hidden form input for easier processing
+                
+                var formDataArray = $("form").serializeObject();    //Serializes object to JSON
+                
+                //update song then return to profile page
+                fetch(url, {
+                    method: 'put',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formDataArray)
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    window.location.href = "/profile";
+                })
+                
+                event.preventDefault();
+              });
+            
+            //jquery helper function for turning form data to json
+            $.fn.serializeObject = function()
+            {
+                var o = {};
+                var a = this.serializeArray();
+                $.each(a, function() {
+                    if(o[this.name] !== undefined) {
+                        if(!o[this.name].push) {
+                            o[this.name] = [o[this.name]];
+                        }
+                        o[this.name].push(this.value || '');    
+                    } else {
+                        o[this.name] = this.value || '';
+                    }
+                });
+                o['notes'] = notesArray;    //inserts the notes array
+                return o;
+            }
+            
+            //delete the song from the databse then return to profile
+            $("#delete").click(function() {
+                var formData = $("form").serializeObject();
+
+                fetch(url, {
+                    method: 'delete',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formData)
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    window.location.href = "/profile";
+                })
+                
+                event.preventDefault();
+            });
+        });
+        
+        //MUSIC PLAYER SETUP ==========
+                
+		//setup a polyphonic sampler
+        //keys holds the notes to be used
+		var keys = new Tone.Players({
+            "C4" : "./audio/C4.[wav]",
+            "D4" : "./audio/D4.[wav]",
+            "E4" : "./audio/E4.[wav]",
+            "F4" : "./audio/F4.[wav]",
+            "G4" : "./audio/G4.[wav]",
+            "A4" : "./audio/A4.[wav]",
+            "B4" : "./audio/B4.[wav]",
+            "C5" : "./audio/C5.[wav]",
+
+		}, {
+			"volume" : -10,
+			"fadeOut" : "64n",
+		}).toMaster();    //the audio output
+		
+        //the notes and their names
+		var noteNames = ["C5", "B4", "A4", "G4", "F4", "E4", "D4", "C4"];
+        
+        //sets up loop using a sequencer of the notes
+		var loop = new Tone.Sequence(function(time, col){
+			var column = matrix1.matrix[col];
+			for (var i = 0; i < 8; i++){
+                //if the note is activated in the column, play it
+				if (column[i] === 1){
+					keys.get(noteNames[i]).start(time, 0, "2n", 0);
+				}
+			}
+		}, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "8n"); //columns, 1/8 note
+		Tone.Transport.start();   //start the player
+		
+        // Nexus UI //
+		nx.onload = function(){
+            
+            nx.colorize("#ff9900");
+            
+            //sets up the bpm slider
+            slider1.hslider = true;
+            slider1.resize($("#Content").width(), 25);  //fit to width of screen
+            slider1.value = bpm;    //set bpm value with loaded value
+            slider1.init();
+            slider1.draw(); //render the slider
+			
+            //set up the note matrix
+			matrix1.col = 16;
+            matrix1.init();
+			matrix1.resize($("#Content").width(), 500); //fit to width of screen
+			matrix1.draw();  //render matrix
+            
+            //transmission function (like a listener)
+            //when any of the UI is interacted with,
+            //it emits output to this function
+            nx.sendsTo(function(data) {
+                //define a custom transmission function
+                var val = Math.round(data.value);
+                
+                //draw the nx components
+                matrix1.draw();
+                slider1.draw();
+                
+                //bpm can only be 80 or higher
+                //any number within that range means the bpm slider is being manipulated
+                if(val >= 80){
+                    //change the bpm accordingly
+                    Tone.Transport.bpm.value = val;
+                    bpm = val;
+                } else if(val === 1) {  //if 1 is transmitted, the play toggle has been activated
+                    loop.start();   //start playing loop
+                    notesArray = matrix1.matrix;    //send current matrix to matrix that will be saved
+                } else if(val === 0) {  //if 0 is transmitted, that a note has been deactivated
+                    notesArray = matrix1.matrix;//send current matrix to matrix that will be saved
+				    loop.stop();    //stop playing loop
+                }
+
+            })
+             
+		}
+	</script>
+</body>
+</html>

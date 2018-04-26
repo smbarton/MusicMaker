@@ -1,0 +1,83 @@
+<!-- views/profile.ejs -->
+<!doctype html>
+<html>
+<head>
+    	<title>Song List!</title>
+
+        <link rel="stylesheet" type="text/css" href="/css/bootstrap.css">
+    <style>
+        body { 
+            padding-top:80px;
+            background-color: black;
+        }
+    </style>
+    
+    <!-- Insert this line above script imports  -->
+    <script>if (typeof module === 'object') {window.module = module; module = undefined;}</script>
+
+    
+    <script src="/scripts/jquery.min.js"></script>
+    
+    <!-- Insert this line after script imports -->
+    <script>if (window.module) module = window.module;</script>
+    
+    <script>
+        $(document).ready(function(){
+            
+            //Show each created song and the user that created the songs
+            $.get("/api/comps", function(data) {
+                console.log("get: ", data);
+                //Create a link to each song to allow the user to edit it
+                $.each(data, function(index) {
+                    $("#comps").append("<div><h1>"+data[index].title+"</h1><h4>By: "+data[index].user+"</h4><a href='/edit?_id="+data[index]._id+"'>edit</a></div>");
+                })
+            });
+            
+            //create a new song
+            $("form").submit(function() {
+                var formData = $("form").serialize();
+                console.log("add: ", formData);           
+                $.post("/api/comps", formData, function(data) {
+                    console.log(data.message);
+                    window.location.reload();   //refresh page
+                }, "json");
+            
+                event.preventDefault();
+            });
+        });
+    </script>
+</head>
+<body>
+<div class="container">
+
+    <div class="page-header text-center">
+        <h1>Song List</h1>
+        <a href="/logout" class="btn btn-default btn-sm">Logout</a>
+    </div>
+
+    <div class="row">
+
+        <!-- LOCAL INFORMATION -->
+        <div class="col-sm-6">
+            <div class="well">
+                <h3><%= user.local.email %></h3>
+
+                <!-- PLace songs in this div -->
+                <div id="comps">
+                </div>
+
+                <h3>Create a New Song</h3>
+                <form method="post">
+                    <input name="title" placeholder="title" required>
+                    <input name="user" value="<%= user.local.email %>" hidden> <!-- Add user who created it to data -->
+                    <button type="submit">Create Song</button>
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+</body>
+</html>
